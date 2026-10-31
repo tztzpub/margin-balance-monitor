@@ -37,3 +37,42 @@ def test_panel_interactions(tmp_path):
      narrow.screenshot(path=str(tmp_path/'margin-panel-narrow.png'),full_page=True)
      print('PASS desktop/mobile/narrow; all presets/custom/invalid dates; hover/touch/keyboard; axis drag/reset; console',errors)
      browser.close()
+
+def test_lookback_anchor_uses_full_trading_history(tmp_path):
+    import pandas as pd
+    root=Path(__file__).resolve().parents[1]
+    dates=pd.read_csv(root/'data/financing_accounts_daily.csv')['date'].to_list()
+    with sync_playwright() as w:
+        browser=w.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':1440,'height':1250})
+        page.goto((root/'index.html').as_uri());page.wait_for_timeout(120)
+        assert not page.locator('#financing .lookback').is_visible()
+        box=page.locator('#financing .plot').bounding_box()
+        page.mouse.move(box['x']+box['width']*.65,box['y']+80)
+        for panel in ['financing','lending']:
+            anchor=page.locator(f'#{panel} .lookback')
+            selected=anchor.get_attribute('data-selected-date')
+            assert anchor.get_attribute('data-anchor-date')==dates[dates.index(selected)-20]
+            assert page.locator(f'#{panel} .lookback-label').is_visible()
+        page.screenshot(path=str(tmp_path/'anchor-desktop.png'),full_page=True)
+        # The previous 20 observations remain available outside the selected range.
+        page.locator('#financing .plot').focus();page.keyboard.press('Home')
+        assert '← T−20' in page.locator('#financing .lookback-label').text_content()
+        assert not page.locator('#financing .lookback-line').is_visible()
+        selected=page.locator('#financing .lookback').get_attribute('data-selected-date')
+        assert page.locator('#financing .lookback').get_attribute('data-anchor-date')==dates[dates.index(selected)-20]
+        page.screenshot(path=str(tmp_path/'anchor-outside.png'),full_page=True)
+        page.locator('[data-range="all"]').click()
+        page.locator('#financing .plot').focus();page.keyboard.press('Home')
+        assert page.locator('#financing .lookback').get_attribute('data-anchor-date')==dates[0]
+        phone=browser.new_page(viewport={'width':320,'height':850},is_mobile=True,has_touch=True)
+        phone.goto((root/'index.html').as_uri());phone.wait_for_timeout(120)
+        box=phone.locator('#lending .plot').bounding_box();phone.touchscreen.tap(box['x']+box['width']*.6,box['y']+100)
+        assert phone.locator('#financing .lookback-label').is_visible()
+        assert phone.locator('#lending .lookback').get_attribute('data-anchor-date')==phone.locator('#financing .lookback').get_attribute('data-anchor-date')
+        assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        phone.screenshot(path=str(tmp_path/'anchor-mobile.png'),full_page=True)
+        # A fresh range has no leftover hover shading.
+        phone.locator('[data-range="1m"]').tap()
+        assert not phone.locator('#financing .lookback').is_visible()
+        browser.close()

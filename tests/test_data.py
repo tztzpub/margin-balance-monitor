@@ -15,6 +15,8 @@ def test_twenty_observations_and_no_range_rebasing(tmp_path):
  assert rows[0][0]==f.iloc[20]['date']
  assert rows[0][1]==20
  assert rows[0][2]==100
+ assert rows[0][3]==f.iloc[0]['date']
+ assert rows[-1][3]==f.iloc[4]['date']
  assert rows[-1][1]==pytest.approx((124/104-1)*100,abs=1e-6)
 
 def test_missing_history_and_invalid_data_fail():
