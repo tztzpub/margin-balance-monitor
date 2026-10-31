@@ -1,6 +1,6 @@
 # 融资与融券
 
-[打开网页](https://brandonyfeng.github.io/margin-balance-monitor/)
+[打开网页](https://tztzpub.github.io/margin-balance-monitor/)
 
 两张同步时间轴曲线：融资余额、融券余额的20个交易日变化率。
 支持起止日期、YTD、常用时间范围、同步游标和独立纵轴缩放。
