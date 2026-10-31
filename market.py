@@ -1,4 +1,4 @@
-"""Public daily prices and the agreed previous-close-filled 60-session BIAS."""
+"""Public daily closing prices and contemporaneous 60-session BIAS."""
 from pathlib import Path
 import math
 from datetime import datetime
@@ -89,13 +89,11 @@ def bias_data(path=PRICE_FILE):
     result=[]
     for spec in SERIES:
         g=frame.loc[frame.id==spec['id']].sort_values('date')
-        # At date t, the window consists of t-59..t-1 plus a second copy of t-1.
-        # Today's actual close is deliberately never part of today's calculation.
-        previous=g.close.shift(1)
-        average=(g.close.shift(1).rolling(59,min_periods=59).sum()+previous)/60
-        bias=(previous/average-1)*100
-        prev_date=g.date.shift(1);start_date=g.date.shift(59)
+        # Each completed session uses its own close and the 60 closes ending there.
+        average=g.close.rolling(60,min_periods=60).mean()
+        bias=(g.close/average-1)*100
+        start_date=g.date.shift(59)
         rows=[[d,round(float(b),6),round(float(c),8),round(float(m),8),p,a]
-              for d,b,c,m,p,a in zip(g.date,bias,previous,average,prev_date,start_date) if pd.notna(b)]
+              for d,b,c,m,p,a in zip(g.date,bias,g.close,average,g.date,start_date) if pd.notna(b)]
         result.append({**spec,'rows':rows})
     return result

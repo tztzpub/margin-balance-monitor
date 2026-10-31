@@ -71,12 +71,12 @@ function showBias(v,date,inspect){
   document.querySelector(`[data-bias-value="${j}"]`).textContent=r?pct(r[1]):'—';
   const dot=v.dots[j];if(dot){const cy=r?v.y(r[1]):-1;dot.style.display=r&&cy>=v.T&&cy<=v.H-v.B?'':'none';if(r){dot.setAttribute('cx',x);dot.setAttribute('cy',cy)}}
   const label=document.querySelector(`[data-bias="${j}"]`).closest('label');
-  label.title=r?`${s.name} · ${s.code}\n价格日期 ${r[4]} · 昨收 ${r[2]} · MA60 ${r[3].toFixed(4)}`:`${s.name} · ${s.code} · 此日期暂无数据`;
+  label.title=r?`${s.name} · ${s.code}\n价格日期 ${r[4]} · 收盘价 ${r[2]} · MA60 ${r[3].toFixed(4)}`:`${s.name} · ${s.code} · 此日期暂无数据`;
   if(r&&checked)detail.push(`${s.name} ${pct(r[1])}`);
  });
  v.svg.setAttribute('aria-label',`${date}，60日乖离率，${detail.join('，')}`);
  const selected=BIAS.map((s,j)=>({s,r:biasMaps[j].get(date),j})).filter(o=>o.r&&document.querySelector(`[data-bias="${o.j}"]`).checked);
- document.querySelector('#bias .bias-detail').innerHTML=inspect?selected.map(({s,r})=>`<span><strong>${s.name}</strong> · ${r[4]} 昨收 ${r[2].toLocaleString('en-US',{maximumFractionDigits:3})} · MA60 ${r[3].toLocaleString('en-US',{maximumFractionDigits:3})}</span>`).join(''):'';
+ document.querySelector('#bias .bias-detail').innerHTML=inspect?selected.map(({s,r})=>`<span><strong>${s.name}</strong> · ${r[4]} 收盘价 ${r[2].toLocaleString('en-US',{maximumFractionDigits:3})} · MA60 ${r[3].toLocaleString('en-US',{maximumFractionDigits:3})}</span>`).join(''):'';
 }
 function xTicks(rows,width){const start=state.from,end=state.to,days=(end-start)/86400000,result=[];
  if(days>365*2){for(let year=+rows[0][0].slice(0,4);year<=+rows.at(-1)[0].slice(0,4);year++)for(const month of [0,5]){const t=Date.UTC(year,month,1);if(t>=start&&t<=end)result.push([t,`${year}-${month+1}`])}}

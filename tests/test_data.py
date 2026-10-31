@@ -38,18 +38,23 @@ def test_pagination_rejects_incomplete_response():
  with pytest.raises(ValueError,match='Incomplete'):fetch(Session())
 
 
-def test_bias_uses_previous_close_twice_not_today(tmp_path):
+def test_bias_uses_today_close_and_sixty_sessions_without_future_data(tmp_path):
  from market import bias_data,SERIES
  dates=pd.bdate_range('2025-01-01',periods=70).strftime('%Y-%m-%d')
  frame=pd.DataFrame([(s['id'],d,float(i+100)) for s in SERIES for i,d in enumerate(dates)],columns=['id','date','close'])
  path=tmp_path/'prices.csv';frame.to_csv(path,index=False)
  before=bias_data(path)[0]['rows']
  assert before[0][0]==dates[59]
- assert before[0][1]==pytest.approx((158/((sum(range(100,159))+158)/60)-1)*100,abs=1e-6)
- assert before[0][4]==dates[58]
+ assert before[0][1]==pytest.approx((159/(sum(range(100,160))/60)-1)*100,abs=1e-6)
+ assert before[0][4]==dates[59]
+ assert before[0][5]==dates[0]
  frame.loc[frame.date==dates[-1],'close']=999999
  frame.to_csv(path,index=False)
- assert bias_data(path)[0]['rows'][-1]==before[-1]
+ after=bias_data(path)[0]['rows']
+ assert after[:-1]==before[:-1]
+ assert after[-1][1]!=before[-1][1]
+ assert after[-1][2]==999999
+ assert after[-1][3]==pytest.approx((sum(range(110,169))+999999)/60,abs=1e-8)
 
 
 def test_market_missing_day_cannot_silently_shorten_window(tmp_path):
@@ -60,9 +65,9 @@ def test_market_missing_day_cannot_silently_shorten_window(tmp_path):
  with pytest.raises(ValueError,match='trading sessions'):validate_prices(frame.loc[~((frame.id=='star')&(frame.date==dates[20]))])
 
 
-def test_october_30_bias_reproduces_supplied_numbers():
+def test_october_30_bias_uses_actual_completed_close():
  from market import bias_data
- expected={'all':-11.11,'star':-21.32,'chinext':-21.81,'csi300':-9.2,'csi500':-13.98,'csi1000':-13.14,'csi2000':-11.16}
+ expected={'all':-13.15,'star':-25.23,'chinext':-24.86,'csi300':-10.45,'csi500':-16.44,'csi1000':-16.06,'csi2000':-14.15}
  for series in bias_data():
   if series['id'] in expected:
    row=next(r for r in series['rows'] if r[0]=='2026-10-30')

@@ -14,7 +14,7 @@ def test_panel_interactions(tmp_path):
       assert page.locator(f'[data-range="{label}"]').get_attribute('aria-pressed')=='true'
      page.locator('[data-range="ytd"]').click();page.screenshot(path=str(tmp_path/'margin-panel-ytd.png'),full_page=True)
      assert page.locator('#from').input_value()=='2026-01-01'
-     plot=page.locator('#financing .plot');plot.scroll_into_view_if_needed();b=plot.bounding_box();page.mouse.move(b['x']+b['width']*.5,b['y']+b['height']*.5)
+     plot=page.locator('#financing .plot');plot.scroll_into_view_if_needed();plot.focus();page.wait_for_timeout(250);b=plot.bounding_box();page.mouse.move(b['x']+b['width']*.5,b['y']+b['height']*.5)
      dates=page.locator('.reading time').all_text_contents();assert dates[0]==dates[1] and dates[0]<'2026-10-30',dates
      page.screenshot(path=str(tmp_path/'margin-panel-hover.png'),full_page=True)
      plot.focus();page.keyboard.press('ArrowLeft');assert page.locator('#financing .reading time').inner_text()<dates[0]
@@ -99,11 +99,12 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto((root/'index.html').as_uri());page.wait_for_timeout(200)
         assert page.locator('.bias-series').count()==7
-        assert page.locator('[data-bias-value="1"]').inner_text()=='−21.32%'
-        assert page.locator('[data-bias-value="6"]').inner_text()=='−11.16%'
+        assert page.locator('[data-bias-value="1"]').inner_text()=='−25.23%'
+        assert page.locator('[data-bias-value="6"]').inner_text()=='−14.15%'
         page.locator('#bias .plot').focus();page.keyboard.press('ArrowLeft')
         assert page.locator('#bias .bias-date').inner_text()==page.locator('#financing .reading time').inner_text()
-        assert '2026-10-28' in page.locator('.bias-detail').inner_text()
+        assert '2026-10-29' in page.locator('.bias-detail').inner_text()
+        assert '收盘价' in page.locator('.bias-detail').inner_text()
         page.screenshot(path=str(tmp_path/'bias-desktop.png'),full_page=True)
         page.locator('[data-bias="1"]').uncheck(force=True)
         assert page.locator('[data-series="star"]').count()==0
