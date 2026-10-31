@@ -12,6 +12,8 @@ def sample():
 def test_twenty_observations_and_no_range_rebasing(tmp_path):
  f=sample();path=tmp_path/'input.csv';f.to_csv(path,index=False);rows=chart_data(path)
  assert len(rows)==5
+ assert rows[0][4:]==[120,40,100,20]
+ assert rows[-1][4:]==[124,44,104,24]
  assert rows[0][0]==f.iloc[20]['date']
  assert rows[0][1]==20
  assert rows[0][2]==100

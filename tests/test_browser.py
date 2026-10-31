@@ -17,7 +17,7 @@ def test_panel_interactions(tmp_path):
      plot=page.locator('#financing .plot');b=plot.bounding_box();page.mouse.move(b['x']+b['width']*.5,b['y']+b['height']*.5)
      dates=page.locator('.reading time').all_text_contents();assert dates[0]==dates[1] and dates[0]<'2026-10-30',dates
      page.screenshot(path=str(tmp_path/'margin-panel-hover.png'),full_page=True)
-     plot.focus();page.keyboard.press('ArrowLeft');assert page.locator('#financing time').inner_text()<dates[0]
+     plot.focus();page.keyboard.press('ArrowLeft');assert page.locator('#financing .reading time').inner_text()<dates[0]
      old=page.locator('#financing svg').get_attribute('data-y-max');axis=page.locator('#financing .axis-hit');bb=axis.bounding_box()
      page.mouse.move(bb['x']+20,bb['y']+70);page.mouse.down();page.mouse.move(bb['x']+20,bb['y']+140,steps=10);page.mouse.up();page.wait_for_timeout(100)
      assert page.locator('#financing svg').get_attribute('data-y-max')!=old
@@ -54,6 +54,17 @@ def test_lookback_anchor_uses_full_trading_history(tmp_path):
             selected=anchor.get_attribute('data-selected-date')
             assert anchor.get_attribute('data-anchor-date')==dates[dates.index(selected)-20]
             assert page.locator(f'#{panel} .lookback-label').is_visible()
+        balances=pd.read_csv(root/'data/financing_accounts_daily.csv').set_index('date')
+        def check_balances(target):
+            for panel,column in [('financing','financing_balance_yi'),('lending','securities_lending_balance_yi')]:
+                assert target.locator(f'#{panel} h2').inner_text().endswith('余额20日变化率')
+                for selector in ['balance-current','balance-previous']:
+                    date=target.locator(f'#{panel} .{selector} time').inner_text()
+                    shown=target.locator(f'#{panel} .{selector} b').inner_text()
+                    assert shown==f'{balances.loc[date,column]:,.2f} 亿元'
+                assert target.locator(f'#{panel} .balance-current time').inner_text()==target.locator(f'#{panel} .reading time').inner_text()
+                assert target.locator(f'#{panel} .balance-previous time').inner_text()==target.locator(f'#{panel} .lookback').get_attribute('data-anchor-date')
+        check_balances(page)
         page.screenshot(path=str(tmp_path/'anchor-desktop.png'),full_page=True)
         # The previous 20 observations remain available outside the selected range.
         page.locator('#financing .plot').focus();page.keyboard.press('Home')
@@ -67,10 +78,12 @@ def test_lookback_anchor_uses_full_trading_history(tmp_path):
         assert page.locator('#financing .lookback').get_attribute('data-anchor-date')==dates[0]
         phone=browser.new_page(viewport={'width':320,'height':850},is_mobile=True,has_touch=True)
         phone.goto((root/'index.html').as_uri());phone.wait_for_timeout(120)
+        phone.locator('#lending .plot').scroll_into_view_if_needed()
         box=phone.locator('#lending .plot').bounding_box();phone.touchscreen.tap(box['x']+box['width']*.6,box['y']+100)
         assert phone.locator('#financing .lookback-label').is_visible()
         assert phone.locator('#lending .lookback').get_attribute('data-anchor-date')==phone.locator('#financing .lookback').get_attribute('data-anchor-date')
         assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        check_balances(phone)
         phone.screenshot(path=str(tmp_path/'anchor-mobile.png'),full_page=True)
         # A fresh range has no leftover hover shading.
         phone.locator('[data-range="1m"]').tap()
