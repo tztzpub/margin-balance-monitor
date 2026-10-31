@@ -14,7 +14,7 @@ def test_panel_interactions(tmp_path):
       assert page.locator(f'[data-range="{label}"]').get_attribute('aria-pressed')=='true'
      page.locator('[data-range="ytd"]').click();page.screenshot(path=str(tmp_path/'margin-panel-ytd.png'),full_page=True)
      assert page.locator('#from').input_value()=='2026-01-01'
-     plot=page.locator('#financing .plot');b=plot.bounding_box();page.mouse.move(b['x']+b['width']*.5,b['y']+b['height']*.5)
+     plot=page.locator('#financing .plot');plot.scroll_into_view_if_needed();b=plot.bounding_box();page.mouse.move(b['x']+b['width']*.5,b['y']+b['height']*.5)
      dates=page.locator('.reading time').all_text_contents();assert dates[0]==dates[1] and dates[0]<'2026-10-30',dates
      page.screenshot(path=str(tmp_path/'margin-panel-hover.png'),full_page=True)
      plot.focus();page.keyboard.press('ArrowLeft');assert page.locator('#financing .reading time').inner_text()<dates[0]
@@ -29,7 +29,7 @@ def test_panel_interactions(tmp_path):
      mobile.on('pageerror',lambda x:errors.append(str(x)));mobile.goto(p.as_uri());mobile.wait_for_timeout(200)
      assert mobile.evaluate('document.documentElement.scrollWidth<=innerWidth')
      mobile.screenshot(path=str(tmp_path/'margin-panel-mobile.png'),full_page=True)
-     mobile.locator('[data-range="ytd"]').tap();mb=mobile.locator('#lending .plot').bounding_box();mobile.touchscreen.tap(mb['x']+mb['width']*.5,mb['y']+100)
+     mobile.locator('[data-range="ytd"]').tap();mobile.locator('#lending .plot').scroll_into_view_if_needed();mb=mobile.locator('#lending .plot').bounding_box();mobile.touchscreen.tap(mb['x']+mb['width']*.5,mb['y']+100)
      dates=mobile.locator('.reading time').all_text_contents();assert dates[0]==dates[1] and dates[0]<'2026-10-30',dates
      mobile.screenshot(path=str(tmp_path/'margin-panel-mobile-touch.png'),full_page=True)
      narrow=browser.new_page(viewport={'width':320,'height':820},device_scale_factor=1,is_mobile=True,has_touch=True);narrow.goto(p.as_uri());narrow.wait_for_timeout(200)
@@ -88,4 +88,35 @@ def test_lookback_anchor_uses_full_trading_history(tmp_path):
         # A fresh range has no leftover hover shading.
         phone.locator('[data-range="1m"]').tap()
         assert not phone.locator('#financing .lookback').is_visible()
+        browser.close()
+
+
+def test_bias_chart_shared_range_and_selection(tmp_path):
+    root=Path(__file__).resolve().parents[1]
+    with sync_playwright() as w:
+        browser=w.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':1440,'height':2000})
+        errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        page.goto((root/'index.html').as_uri());page.wait_for_timeout(200)
+        assert page.locator('.bias-series').count()==7
+        assert page.locator('[data-bias-value="1"]').inner_text()=='−21.32%'
+        assert page.locator('[data-bias-value="6"]').inner_text()=='−11.16%'
+        page.locator('#bias .plot').focus();page.keyboard.press('ArrowLeft')
+        assert page.locator('#bias .bias-date').inner_text()==page.locator('#financing .reading time').inner_text()
+        assert '2026-10-28' in page.locator('.bias-detail').inner_text()
+        page.screenshot(path=str(tmp_path/'bias-desktop.png'),full_page=True)
+        page.locator('[data-bias="1"]').uncheck(force=True)
+        assert page.locator('[data-series="star"]').count()==0
+        page.locator('[data-range="all"]').click()
+        page.locator('#bias .plot').focus();page.keyboard.press('Home')
+        assert page.locator('[data-bias-value="1"]').inner_text()=='—'
+        page.screenshot(path=str(tmp_path/'bias-history.png'),full_page=True)
+        phone=browser.new_page(viewport={'width':320,'height':850},is_mobile=True,has_touch=True)
+        phone.on('pageerror',lambda e:errors.append(str(e)));phone.goto((root/'index.html').as_uri());phone.wait_for_timeout(200)
+        phone.locator('#bias .plot').scroll_into_view_if_needed();bb=phone.locator('#bias .plot').bounding_box()
+        phone.touchscreen.tap(bb['x']+bb['width']*.65,bb['y']+100)
+        assert phone.locator('.bias-detail').inner_text()
+        assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
+        phone.screenshot(path=str(tmp_path/'bias-mobile.png'),full_page=True)
+        assert not errors,errors
         browser.close()

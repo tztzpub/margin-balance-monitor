@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from market import fetch_prices,PRICE_FILE
 
 ROOT=Path(__file__).resolve().parent
 DATA=ROOT/'data/financing_accounts_daily.csv'
@@ -43,11 +44,16 @@ def main():
     session.headers.update({'User-Agent':'Mozilla/5.0 (compatible; MarginBalanceMonitor/1.0)','Referer':'https://data.eastmoney.com/'})
     retry=Retry(total=3,backoff_factor=1,status_forcelist=[429,500,502,503,504],allowed_methods=['GET'])
     session.mount('https://',HTTPAdapter(max_retries=retry))
-    with session:f=fetch(session)
+    previous_prices=pd.read_csv(PRICE_FILE,dtype={'id':str,'date':str}) if PRICE_FILE.exists() else None
+    with session:
+        f=fetch(session)
+        prices=fetch_prices(session,previous_prices)
+    if prices.date.max()<f.date.max():raise ValueError('Market quotes lag the margin data publication date')
     previous=pd.read_csv(DATA) if DATA.exists() else None
     validate(f,previous)
+    temporary=PRICE_FILE.with_suffix('.tmp');prices.to_csv(temporary,index=False);temporary.replace(PRICE_FILE)
     temporary=DATA.with_suffix('.tmp');f.to_csv(temporary,index=False);temporary.replace(DATA)
-    status=dict(checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f))
+    status=dict(checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f),market_last_date=prices.date.max())
     status_path=ROOT/'data/status.json';temporary=status_path.with_suffix('.tmp');temporary.write_text(json.dumps(status,indent=2)+'\n');temporary.replace(status_path)
     print(json.dumps(status))
 if __name__=='__main__':main()
