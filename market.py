@@ -100,7 +100,11 @@ def fetch_prices(session,previous=None):
             if date in calendar:csi.append((key,date,float(r['close'])))
         if previous is not None:
             expected=set(previous.loc[(previous.id==key) & (previous.date>=f'{first_year}-01-01'),'date'])
-            if not expected<={row[1] for row in csi}:raise ValueError(f'{key}: CSI refresh omitted published sessions')
+            omitted=expected-{row[1] for row in csi}
+            if omitted:
+                # Retain already verified closes from this same source. The final
+                # validation still rejects gaps for sessions never downloaded.
+                print(f'{key}: retaining published CSI closes omitted by response: {sorted(omitted)}')
         frame=pd.concat([frame,pd.DataFrame(csi,columns=['id','date','close'])])
     if previous is not None:frame=pd.concat([previous,frame]).drop_duplicates(['id','date'],keep='last')
     frame=frame.sort_values(['id','date']).reset_index(drop=True)

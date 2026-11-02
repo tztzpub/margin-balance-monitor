@@ -130,3 +130,31 @@ def test_official_index_publication_lag_does_not_block_new_market_closes(tmp_pat
  assert values['csi300'][-1][0]==dates[-1]
  broken=lagged[~((lagged.id=='all')&(lagged.date==dates[-3]))]
  with pytest.raises(ValueError,match='missing or unexpected'):validate_prices(broken)
+
+
+def test_csi_refresh_retains_verified_history_but_rejects_new_gaps(monkeypatch):
+ import market
+ from datetime import datetime
+ class Clock:
+  @staticmethod
+  def now(tz):return datetime(2026,11,2,23,0,tzinfo=tz)
+ monkeypatch.setattr(market,'datetime',Clock)
+ previous=pd.DataFrame([(s['id'],d,100.) for s in market.SERIES for d in ['2026-10-29','2026-10-30']],columns=['id','date','close'])
+ class Response:
+  def __init__(self,payload):self.payload=payload
+  def raise_for_status(self):pass
+  def json(self):return self.payload
+ class Session:
+  def get(self,url,params,**kwargs):
+   if 'indexCode' in params:
+    code=params['indexCode']
+    return Response({'code':200,'data':[{'indexCode':code,'tradeDate':d,'close':101.} for d in ['2026-10-29','2026-11-02']]})
+   ticker,_,start,*_=params['param'].split(',')
+   bars=[[d,'100','101'] for d in ['2026-10-29','2026-10-30','2026-11-02']] if start.startswith('2026') else []
+   return Response({'code':0,'data':{ticker:{'day':bars}}})
+ result=market.fetch_prices(Session(),previous)
+ assert result.loc[(result.id=='csi2000')&(result.date=='2026-10-30'),'close'].item()==100.
+ assert result.loc[(result.id=='all')&(result.date=='2026-11-02'),'close'].item()==101.
+ missing=previous[~((previous.id=='csi2000')&(previous.date=='2026-10-30'))]
+ with pytest.raises(ValueError,match='missing or unexpected'):
+  market.fetch_prices(Session(),missing)
