@@ -131,7 +131,7 @@ def test_etf_board_is_separate_from_original_chart(tmp_path):
         browser=w.chromium.launch(headless=True)
         for width in [1440,360,320]:
             page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
-            page.route('https://web.ifzq.gtimg.cn/**',lambda r:r.abort())
+            page.route('https://*.gtimg.cn/**',lambda r:r.abort())
             page.goto((root/'index.html').as_uri())
             assert page.locator('[data-bias]').count()==7
             assert page.locator('#etf-monitor tbody tr').count()==12
