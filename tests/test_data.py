@@ -83,3 +83,35 @@ def test_market_refresh_rejects_missing_source_overlap():
  class Session:
   def get(self,*args,**kwargs):return Response()
  with pytest.raises(ValueError,match='omitted published sessions'):fetch_prices(Session(),previous)
+
+
+def test_new_etfs_backfill_while_existing_series_refresh_recently(monkeypatch):
+ import market
+ from datetime import datetime
+ class Clock:
+  @staticmethod
+  def now(tz):return datetime(2026,11,2,13,0,tzinfo=tz)
+ monkeypatch.setattr(market,'datetime',Clock)
+ previous=pd.DataFrame([('csi300','2026-10-30',100.)],columns=['id','date','close'])
+ requests=[]
+ class Response:
+  def raise_for_status(self):pass
+  def json(self):return {'code':0,'data':{}}
+ class Session:
+  def get(self,url,params,**kwargs):
+   requests.append(params['param'])
+   return Response()
+ with pytest.raises(ValueError,match='omitted published sessions'):
+  market.fetch_prices(Session(),previous)
+ assert all(',2026-11-02,' not in x for x in requests)
+ assert any(',2026-11-01,' in x for x in requests)
+ assert any(x.startswith('sz159919,day,2012-01-01,') for x in requests)
+ assert any(x.startswith('sh000300,day,2025-01-01,') for x in requests)
+ assert not any(x.startswith('sh000300,day,2012-01-01,') for x in requests)
+
+
+def test_requested_etfs_are_distinct_instruments():
+ from market import SERIES
+ expected={'159919','510500','510300','512100','563220','159915','159949','159353','588000','510330','159977','510050'}
+ assert expected <= {s['code'] for s in SERIES}
+ assert len(SERIES)==len({s['id'] for s in SERIES})==len({s['code'] for s in SERIES})

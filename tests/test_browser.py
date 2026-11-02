@@ -47,6 +47,7 @@ def test_lookback_anchor_uses_full_trading_history(tmp_path):
         page=browser.new_page(viewport={'width':1440,'height':1250})
         page.goto((root/'index.html').as_uri());page.wait_for_timeout(120)
         assert not page.locator('#financing .lookback').is_visible()
+        page.locator('#financing .plot').scroll_into_view_if_needed()
         box=page.locator('#financing .plot').bounding_box()
         page.mouse.move(box['x']+box['width']*.65,box['y']+80)
         for panel in ['financing','lending']:
@@ -120,4 +121,29 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         assert phone.evaluate('document.documentElement.scrollWidth<=innerWidth')
         phone.screenshot(path=str(tmp_path/'bias-mobile.png'),full_page=True)
         assert not errors,errors
+        browser.close()
+
+
+def test_added_etfs_can_be_selected_on_desktop_and_phone(tmp_path):
+    import json
+    root=Path(__file__).resolve().parents[1]
+    codes={'159919','510500','510300','512100','563220','159915','159949','159353','588000','510330','159977','510050'}
+    with sync_playwright() as w:
+        browser=w.chromium.launch(headless=True)
+        for width in [1440,360,320]:
+            page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
+            errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            page.goto((root/'index.html').as_uri())
+            data=json.loads(page.locator('#bias-data').text_content())
+            assert codes <= {s['code'] for s in data}
+            assert page.locator('[data-bias]').count()==17
+            for i,s in enumerate(data):
+                if s['code'] in codes:
+                    page.locator(f'[data-bias="{i}"]').check(force=True)
+                    assert page.locator(f'[data-series="{s["id"]}"]').count()==1
+            page.screenshot(path=str(tmp_path/f'etfs-{width}.png'),full_page=True)
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+            assert page.locator('.bias-legend .swatch').first.bounding_box()['width']==24
+            assert not errors
+            page.close()
         browser.close()
