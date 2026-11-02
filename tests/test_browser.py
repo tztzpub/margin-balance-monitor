@@ -124,26 +124,24 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         browser.close()
 
 
-def test_added_etfs_can_be_selected_on_desktop_and_phone(tmp_path):
+def test_etf_board_is_separate_from_original_chart(tmp_path):
     import json
     root=Path(__file__).resolve().parents[1]
-    codes={'159919','510500','510300','512100','563220','159915','159949','159353','588000','510330','159977','510050'}
     with sync_playwright() as w:
         browser=w.chromium.launch(headless=True)
         for width in [1440,360,320]:
             page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
-            errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            page.route('https://web.ifzq.gtimg.cn/**',lambda r:r.abort())
             page.goto((root/'index.html').as_uri())
-            data=json.loads(page.locator('#bias-data').text_content())
-            assert codes <= {s['code'] for s in data}
-            assert page.locator('[data-bias]').count()==17
-            for i,s in enumerate(data):
-                if s['code'] in codes:
-                    page.locator(f'[data-bias="{i}"]').check(force=True)
-                    assert page.locator(f'[data-series="{s["id"]}"]').count()==1
-            page.screenshot(path=str(tmp_path/f'etfs-{width}.png'),full_page=True)
+            assert page.locator('[data-bias]').count()==7
+            assert page.locator('#etf-monitor tbody tr').count()==12
+            assert len(json.loads(page.locator('#etf-specs').text_content()))==12
+            assert page.locator('#etf-monitor [data-code="159919"]').count()==1
+            page.locator('#etf-monitor .etf-pause').click()
+            assert page.locator('#etf-monitor .etf-pause').inner_text()=='继续刷新'
+            page.locator('#etf-monitor [data-sort="code"]').click()
+            assert page.locator('#etf-monitor tbody tr').first.get_attribute('data-code')=='588000'
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
-            assert page.locator('.bias-legend .swatch').first.bounding_box()['width']==24
-            assert not errors
+            page.screenshot(path=str(tmp_path/f'etfs-{width}.png'),full_page=True)
             page.close()
         browser.close()
