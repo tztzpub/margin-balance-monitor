@@ -115,3 +115,18 @@ def test_requested_etfs_are_distinct_instruments():
  expected={'159919','510500','510300','512100','563220','159915','159949','159353','588000','510330','159977','510050'}
  assert expected <= {s['code'] for s in SERIES}
  assert len(SERIES)==len({s['id'] for s in SERIES})==len({s['code'] for s in SERIES})
+
+
+def test_official_index_publication_lag_does_not_block_new_market_closes(tmp_path):
+ from market import SERIES,validate_prices,bias_data
+ dates=pd.bdate_range('2025-01-01',periods=70).strftime('%Y-%m-%d')
+ frame=pd.DataFrame([(s['id'],d,100.) for s in SERIES for d in dates],columns=['id','date','close'])
+ previous=frame[frame.date<dates[-1]]
+ lagged=frame[~((frame.id=='all')&(frame.date==dates[-1]))]
+ validate_prices(lagged,previous)
+ path=tmp_path/'prices.csv';lagged.to_csv(path,index=False)
+ values={x['id']:x['rows'] for x in bias_data(path)}
+ assert values['all'][-1][0]==dates[-2]
+ assert values['csi300'][-1][0]==dates[-1]
+ broken=lagged[~((lagged.id=='all')&(lagged.date==dates[-3]))]
+ with pytest.raises(ValueError,match='missing or unexpected'):validate_prices(broken)

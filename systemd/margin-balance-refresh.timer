@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh dashboard after market close and during balance publication hours
+
+[Timer]
+# Beijing 08:35, 15:10, and hourly 16:35 through 23:35 on weekdays.
+OnCalendar=Mon..Fri *-*-* 00:35:00 UTC
+OnCalendar=Mon..Fri *-*-* 07:10:00 UTC
+OnCalendar=Mon..Fri *-*-* 08..15:35:00 UTC
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

@@ -51,7 +51,10 @@ def validate_prices(frame,previous=None):
         dates=set(g.date);lo,hi=min(dates),max(dates)
         expected_dates={d for d in calendar if lo<=d<=hi}-confirmed_no_trade.get(key,set())
         if dates!=expected_dates:raise ValueError(f'{key}: missing or unexpected trading sessions; missing={sorted(expected_dates-dates)}, extra={sorted(dates-expected_dates)}')
-        if hi!=max(calendar):raise ValueError(f'{key}: source is stale relative to CSI300')
+        # Official CSI publication can lag Tencent. Preserve its true endpoint;
+        # never hold back other published closes or fill forward a stale index.
+        if key not in ('all','csi2000') and hi!=max(calendar):
+            raise ValueError(f'{key}: source is stale relative to CSI300')
     if previous is not None:
         old=set(zip(previous.id,previous.date));new=set(zip(frame.id,frame.date))
         if not old<=new:raise ValueError('Price refresh would remove published history')

@@ -1,0 +1,7 @@
+[Unit]
+Description=Trigger margin balance dashboard refresh and publication
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/gh workflow run update.yml --repo tztzpub/margin-balance-monitor
+TimeoutStartSec=60

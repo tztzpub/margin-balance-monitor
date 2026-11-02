@@ -53,7 +53,7 @@ def main():
     validate(f,previous)
     temporary=PRICE_FILE.with_suffix('.tmp');prices.to_csv(temporary,index=False);temporary.replace(PRICE_FILE)
     temporary=DATA.with_suffix('.tmp');f.to_csv(temporary,index=False);temporary.replace(DATA)
-    status=dict(checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f),market_last_date=prices.date.max())
+    status=dict(checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f),market_last_date=prices.date.max(),market_dates=prices.groupby('id')['date'].max().to_dict())
     status_path=ROOT/'data/status.json';temporary=status_path.with_suffix('.tmp');temporary.write_text(json.dumps(status,indent=2)+'\n');temporary.replace(status_path)
     print(json.dumps(status))
 if __name__=='__main__':main()
