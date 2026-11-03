@@ -39,6 +39,22 @@ def fetch(session):
     f=pd.DataFrame(records);f['date']=f['STATISTICS_DATE'].str[:10]
     return f[['date',*FIELDS]].rename(columns=FIELDS).sort_values('date').reset_index(drop=True)
 
+def fetch_exchange_status(session):
+    """Check the same per-exchange report used by Eastmoney's margin page."""
+    result={}
+    for code,name in [('007','沪市'),('001','深市'),('002','北交所')]:
+        response=session.get(URL,params=dict(reportName='RPTA_WEB_RZRQ_LSSH',columns='ALL',source='WEB',sortColumns='DIM_DATE',sortTypes=-1,pageNumber=1,pageSize=1,filter=f'(SCDM={code})'),timeout=(10,40))
+        response.raise_for_status();payload=response.json()
+        if not payload.get('success') or not payload.get('result',{}).get('data'):
+            raise ValueError(f'Missing exchange publication: {code}')
+        row=payload['result']['data'][0]
+        if row['SCDM']!=code:raise ValueError('Incorrect exchange identity')
+        values=[float(row[key])/1e8 for key in ['RZYE','RQYE']]
+        if not all(math.isfinite(v) and v>=0 for v in values):raise ValueError('Invalid exchange balances')
+        date=pd.Timestamp(row['DIM_DATE']).strftime('%Y-%m-%d')
+        result[code]=dict(name=name,date=date,financing_balance_yi=values[0],securities_lending_balance_yi=values[1])
+    return result
+
 def main():
     session=requests.Session()
     session.headers.update({'User-Agent':'Mozilla/5.0 (compatible; MarginBalanceMonitor/1.0)','Referer':'https://data.eastmoney.com/'})
@@ -47,13 +63,14 @@ def main():
     previous_prices=pd.read_csv(PRICE_FILE,dtype={'id':str,'date':str}) if PRICE_FILE.exists() else None
     with session:
         f=fetch(session)
+        exchanges=fetch_exchange_status(session)
         prices=fetch_prices(session,previous_prices)
     if prices.date.max()<f.date.max():raise ValueError('Market quotes lag the margin data publication date')
     previous=pd.read_csv(DATA) if DATA.exists() else None
     validate(f,previous)
     temporary=PRICE_FILE.with_suffix('.tmp');prices.to_csv(temporary,index=False);temporary.replace(PRICE_FILE)
     temporary=DATA.with_suffix('.tmp');f.to_csv(temporary,index=False);temporary.replace(DATA)
-    status=dict(checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f),market_last_date=prices.date.max(),market_dates=prices.groupby('id')['date'].max().to_dict())
+    status=dict(exchange_publications=exchanges,checked_at_utc=datetime.now(timezone.utc).isoformat(),source_last_date=f['date'].max(),record_count=len(f),market_last_date=prices.date.max(),market_dates=prices.groupby('id')['date'].max().to_dict())
     status_path=ROOT/'data/status.json';temporary=status_path.with_suffix('.tmp');temporary.write_text(json.dumps(status,indent=2)+'\n');temporary.replace(status_path)
     print(json.dumps(status))
 if __name__=='__main__':main()

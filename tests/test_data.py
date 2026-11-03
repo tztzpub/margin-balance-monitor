@@ -158,3 +158,17 @@ def test_csi_refresh_retains_verified_history_but_rejects_new_gaps(monkeypatch):
  missing=previous[~((previous.id=='csi2000')&(previous.date=='2026-10-30'))]
  with pytest.raises(ValueError,match='missing or unexpected'):
   market.fetch_prices(Session(),missing)
+
+
+def test_exchange_status_keeps_distinct_dates_and_converts_yuan():
+ from refresh import fetch_exchange_status
+ class Response:
+  def __init__(self,code):self.code=code
+  def raise_for_status(self):pass
+  def json(self):return {'success':True,'result':{'data':[{'SCDM':self.code,'DIM_DATE':'2026-10-30' if self.code=='001' else '2026-11-02','RZYE':1192247511122,'RQYE':18150205360}]}}
+ class Session:
+  def get(self,url,params,**kwargs):return Response(params['filter'][6:9])
+ result=fetch_exchange_status(Session())
+ assert result['001']['date']=='2026-10-30'
+ assert result['007']['date']=='2026-11-02'
+ assert result['007']['financing_balance_yi']==pytest.approx(11922.47511122)
