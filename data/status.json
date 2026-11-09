@@ -14,14 +14,14 @@
     },
     "002": {
       "name": "\u5317\u4ea4\u6240",
-      "date": "2026-11-05",
-      "financing_balance_yi": 75.45213975,
-      "securities_lending_balance_yi": 0.00168072
+      "date": "2026-11-06",
+      "financing_balance_yi": 74.70668911,
+      "securities_lending_balance_yi": 0.00013689
     }
   },
-  "checked_at_utc": "2026-11-08T16:47:03.010463+00:00",
-  "source_last_date": "2026-11-05",
-  "record_count": 3422,
+  "checked_at_utc": "2026-11-09T00:36:01.826609+00:00",
+  "source_last_date": "2026-11-06",
+  "record_count": 3423,
   "market_last_date": "2026-11-06",
   "market_dates": {
     "all": "2026-11-06",
