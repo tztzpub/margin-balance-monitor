@@ -99,7 +99,8 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         page=browser.new_page(viewport={'width':1440,'height':2000})
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto((root/'index.html').as_uri());page.wait_for_timeout(200)
-        assert page.locator('.bias-series').count()==7
+        page.locator('#to').fill('2026-10-30');page.locator('#to').dispatch_event('change')
+        assert page.locator('.bias-series').count()==8
         assert page.locator('[data-bias-value="1"]').inner_text()=='−25.23%'
         assert page.locator('[data-bias-value="6"]').inner_text()=='−14.15%'
         page.locator('#bias .plot').focus();page.keyboard.press('ArrowLeft')
@@ -133,7 +134,7 @@ def test_etf_board_is_separate_from_original_chart(tmp_path):
             page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
             page.route('https://*.gtimg.cn/**',lambda r:r.abort())
             page.goto((root/'index.html').as_uri())
-            assert page.locator('[data-bias]').count()==7
+            assert page.locator('[data-bias]').count()==8
             assert page.locator('#etf-monitor tbody tr').count()==12
             assert len(json.loads(page.locator('#etf-specs').text_content()))==12
             assert page.locator('#etf-monitor [data-code="159919"]').count()==1
@@ -143,5 +144,38 @@ def test_etf_board_is_separate_from_original_chart(tmp_path):
             assert page.locator('#etf-monitor tbody tr').first.get_attribute('data-code')=='588000'
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
             page.screenshot(path=str(tmp_path/f'etfs-{width}.png'),full_page=True)
+            page.close()
+        browser.close()
+
+
+def test_microcap_selection_hover_keyboard_and_mobile(tmp_path):
+    import json
+    root=Path(__file__).resolve().parents[1]
+    with sync_playwright() as w:
+        browser=w.chromium.launch(headless=True)
+        for width in [1440,390,320]:
+            page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
+            page.route('https://*.gtimg.cn/**',lambda r:r.abort())
+            errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+            page.goto((root/'index.html').as_uri())
+            spec=next(x for x in json.loads(page.locator('#bias-data').text_content()) if x['id']=='microcap')
+            checkbox=page.get_by_role('checkbox',name='显示微盘股指数',exact=True)
+            assert checkbox.is_checked()
+            assert page.locator('[data-series="microcap"]').count()==1
+            checkbox.uncheck(force=True)
+            assert page.locator('[data-series="microcap"]').count()==0
+            checkbox.check(force=True)
+            plot=page.locator('#bias .plot');plot.scroll_into_view_if_needed();plot.focus()
+            page.keyboard.press('End')
+            assert spec['rows'][-1][0] in page.locator('.bias-detail').inner_text()
+            assert '微盘股指数' in page.locator('.bias-detail').inner_text()
+            assert f'{spec["rows"][-1][1]:+.2f}%'.replace('-','−') in checkbox.locator('..').inner_text()
+            assert not errors
+            assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+            bb=plot.bounding_box()
+            if width<600:page.touchscreen.tap(bb['x']+bb['width']*.7,bb['y']+100)
+            else:page.mouse.move(bb['x']+bb['width']*.7,bb['y']+100)
+            assert '微盘股指数' in page.locator('.bias-detail').inner_text()
+            page.locator('#bias').screenshot(path=str(tmp_path/f'microcap-{width}.png'))
             page.close()
         browser.close()

@@ -172,3 +172,50 @@ def test_exchange_status_keeps_distinct_dates_and_converts_yuan():
  assert result['001']['date']=='2026-10-30'
  assert result['007']['date']=='2026-11-02'
  assert result['007']['financing_balance_yi']==pytest.approx(11922.47511122)
+
+
+def test_microcap_official_identity_overlap_and_completed_sessions():
+ from market import microcap_prices
+ import json
+ from datetime import date
+ old=pd.DataFrame([('microcap','2026-11-09',14804.3563)],columns=['id','date','close'])
+ def payload(rows,code='866006.RI'):return json.dumps({'code':code,'rows':rows})
+ fresh=microcap_prices(payload([['2026-11-09',14804.3563],['2026-11-10',15207.1622]]),old,date(2026,11,10))
+ assert fresh.date.tolist()==['2026-11-09','2026-11-10']
+ assert microcap_prices('',old,date(2026,11,10)).equals(old)
+ for rows,code,match in [([['2026-11-10',1]],'wrong','identity'),
+                         ([['2026-11-11',1]],'866006.RI','incomplete'),
+                         ([['2026-11-09',1]],'866006.RI','revision'),
+                         ([['2026-11-10',-1]],'866006.RI','Invalid'),
+                         ([['2026-11-10',1],['2026-11-10',1]],'866006.RI','duplicate')]:
+  with pytest.raises(ValueError,match=match):microcap_prices(payload(rows,code),old,date(2026,11,10))
+
+
+def test_microcap_actual_sixty_day_bias_and_source_lag():
+ from market import bias_data,PRICE_FILE,validate_prices
+ f=pd.read_csv(PRICE_FILE);g=f[f.id=='microcap'].sort_values('date')
+ s=next(s for s in bias_data() if s['id']=='microcap')
+ assert s['code']=='866006.RI'
+ assert s['rows'][0][0]==g.iloc[59].date
+ assert s['rows'][-1][1]==pytest.approx((g.iloc[-1].close/g.tail(60).close.mean()-1)*100,abs=1e-6)
+ lagged=f[~((f.id=='microcap')&(f.date==g.iloc[-1].date))]
+ validate_prices(lagged)
+ with pytest.raises(ValueError,match='missing or unexpected'):
+  validate_prices(f[~((f.id=='microcap')&(f.date==g.iloc[-3].date))])
+
+
+def test_workstation_dispatch_supplies_official_data_without_shell_interpolation(monkeypatch):
+ import launch_refresh,json
+ from types import SimpleNamespace
+ calls=[]
+ def run(args,**kwargs):
+  calls.append((args,kwargs))
+  return SimpleNamespace(stdout=json.dumps({'code':'866006.RI','rows':[['2026-11-10',15207.1622]]}))
+ monkeypatch.setattr(launch_refresh.subprocess,'run',run)
+ launch_refresh.main()
+ assert calls[0][0][0]=='ssh'
+ assert calls[1][0][:3]==['gh','workflow','run']
+ payload=json.loads(json.loads(calls[1][1]['input'])['microcap'])
+ assert payload['code']=='866006.RI'
+ assert payload['rows']==[['2026-11-10',15207.1622]]
+ assert all(c[1]['check'] for c in calls)

@@ -1,6 +1,8 @@
 """Public daily closing prices and contemporaneous 60-session BIAS."""
 from pathlib import Path
 import math
+import json
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from concurrent.futures import ThreadPoolExecutor
@@ -17,6 +19,7 @@ SERIES=[
     dict(id='csi500',name='中证500',code='000905',secid='1.000905',color='#287b70'),
     dict(id='csi1000',name='中证1000',code='000852',secid='1.000852',color='#765a9b'),
     dict(id='csi2000',name='中证2000',code='932000',secid='2.932000',color='#c16c3a'),
+    dict(id='microcap',name='微盘股指数',code='866006.RI',color='#717b36'),
     dict(id='etf159919',name='沪深300ETF嘉实',code='159919',secid='0.159919',color='#537eaa',default=False),
     dict(id='etf510500',name='中证500ETF南方',code='510500',secid='1.510500',color='#549a86',default=False),
     dict(id='etf510300',name='沪深300ETF华泰柏瑞',code='510300',secid='1.510300',color='#5370aa',default=False),
@@ -53,11 +56,34 @@ def validate_prices(frame,previous=None):
         if dates!=expected_dates:raise ValueError(f'{key}: missing or unexpected trading sessions; missing={sorted(expected_dates-dates)}, extra={sorted(dates-expected_dates)}')
         # Official CSI publication can lag Tencent. Preserve its true endpoint;
         # never hold back other published closes or fill forward a stale index.
-        if key not in ('all','csi2000') and hi!=max(calendar):
+        if key not in ('all','csi2000','microcap') and hi!=max(calendar):
             raise ValueError(f'{key}: source is stale relative to CSI300')
     if previous is not None:
         old=set(zip(previous.id,previous.date));new=set(zip(frame.id,frame.date))
         if not old<=new:raise ValueError('Price refresh would remove published history')
+
+def microcap_prices(payload,previous,end):
+    """Official RiceQuant closes supplied by the existing workstation timer.
+
+    Scheduled GitHub fallback runs retain the last verified observations. Never
+    fabricate a close when the authenticated source has not supplied a session.
+    """
+    old=previous.loc[previous.id=='microcap'].copy() if previous is not None else pd.DataFrame(columns=['id','date','close'])
+    if not payload:
+        if old.empty:raise ValueError('Microcap history has not been supplied')
+        return old
+    supplied=json.loads(payload)
+    if supplied.get('code')!='866006.RI':raise ValueError('Incorrect microcap index identity')
+    fresh=pd.DataFrame(supplied['rows'],columns=['date','close'])
+    if fresh.empty or fresh.date.duplicated().any():raise ValueError('Empty or duplicate microcap observations')
+    pd.to_datetime(fresh.date,format='%Y-%m-%d',errors='raise')
+    if not fresh.close.map(lambda v:isinstance(v,(int,float)) and math.isfinite(v) and v>0).all():
+        raise ValueError('Invalid microcap closes')
+    if (fresh.date>str(end)).any():raise ValueError('Microcap contains an incomplete session')
+    overlap=old.merge(fresh,on='date',suffixes=('_old','_new'))
+    if ((overlap.close_old-overlap.close_new).abs()>1e-6).any():raise ValueError('Microcap history revision')
+    fresh.insert(0,'id','microcap')
+    return pd.concat([old,fresh]).drop_duplicates(['id','date'],keep='last')
 
 def fetch_prices(session,previous=None):
     now=datetime.now(ZoneInfo('Asia/Shanghai'))
@@ -66,7 +92,7 @@ def fetch_prices(session,previous=None):
     first_year=2012 if previous is None else max(2012,int(previous.date.max()[:4])-1)
     tasks=[]
     for spec in SERIES:
-        if spec['id'] in ('csi2000','all'):continue
+        if spec['id'] in ('csi2000','all','microcap'):continue
         ticker=('sh' if spec['secid'].startswith('1.') else 'sz')+spec['code']
         series_first=first_year if previous is not None and spec['id'] in set(previous.id) else 2012
         for year in range(series_first,end.year+1):tasks.append((spec,ticker,year))
@@ -81,7 +107,7 @@ def fetch_prices(session,previous=None):
     with ThreadPoolExecutor(max_workers=4) as pool:parts=list(pool.map(tencent,tasks))
     frame=pd.DataFrame([row for part in parts for row in part],columns=['id','date','close'])
     if previous is not None:
-        overlap=previous.loc[(previous.date>=f'{first_year}-01-01') & ~previous.id.isin(['csi2000','all'])]
+        overlap=previous.loc[(previous.date>=f'{first_year}-01-01') & ~previous.id.isin(['csi2000','all','microcap'])]
         if not set(zip(overlap.id,overlap.date))<=set(zip(frame.id,frame.date)):
             raise ValueError('Tencent refresh omitted published sessions in the requested overlap')
     if previous is not None:
@@ -107,6 +133,8 @@ def fetch_prices(session,previous=None):
                 print(f'{key}: retaining published CSI closes omitted by response: {sorted(omitted)}')
         frame=pd.concat([frame,pd.DataFrame(csi,columns=['id','date','close'])])
     if previous is not None:frame=pd.concat([previous,frame]).drop_duplicates(['id','date'],keep='last')
+    micro=microcap_prices(os.environ.get('MICROCAP_JSON'),previous,end)
+    frame=pd.concat([frame.loc[frame.id!='microcap'],micro])
     frame=frame.sort_values(['id','date']).reset_index(drop=True)
     validate_prices(frame,previous)
     return frame

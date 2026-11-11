@@ -3,6 +3,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      microcap:
+        description: Official 866006.RI completed daily closes from workstation
+        type: string
+        required: false
   schedule:
     # Beijing time: 08:35, 18:35, 22:35, every day.
     - cron: '35 0,10,14 * * *'
@@ -31,6 +36,8 @@ jobs:
       - name: Validate updater and calculations
         run: python -m pytest tests/test_data.py -q
       - name: Refresh public balances
+        env:
+          MICROCAP_JSON: ${{ inputs.microcap }}
         run: python refresh.py
       - name: Build self-contained page
         run: python build.py
