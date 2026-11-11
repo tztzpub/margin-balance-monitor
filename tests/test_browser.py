@@ -100,7 +100,8 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
         page.goto((root/'index.html').as_uri());page.wait_for_timeout(200)
         page.locator('#to').fill('2026-10-30');page.locator('#to').dispatch_event('change')
-        assert page.locator('.bias-series').count()==8
+        assert page.locator('.bias-series').count()==4
+        assert page.locator('[data-bias]:checked').evaluate_all('(xs)=>xs.map(x=>x.getAttribute("aria-label"))')==['显示科创50ETF华夏','显示中证1000','显示中证2000','显示微盘股指数']
         assert page.locator('[data-bias-value="1"]').inner_text()=='−25.23%'
         assert page.locator('[data-bias-value="6"]').inner_text()=='−14.15%'
         page.locator('#bias .plot').focus();page.keyboard.press('ArrowLeft')

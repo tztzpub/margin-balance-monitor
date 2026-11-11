@@ -12,11 +12,11 @@ ROOT=Path(__file__).resolve().parent
 PRICE_FILE=ROOT/'data/market_closes.csv'
 # Exact source identifiers; ETF series use unadjusted exchange prices.
 SERIES=[
-    dict(id='all',name='中证全指',code='000985',secid='1.000985',color='#233c51'),
+    dict(id='all',name='中证全指',code='000985',secid='1.000985',color='#233c51',default=False),
     dict(id='star',name='科创50ETF华夏',code='588000',secid='1.588000',color='#a34c66'),
-    dict(id='chinext',name='创业板ETF易方达',code='159915',secid='0.159915',color='#9a6b00'),
-    dict(id='csi300',name='沪深300',code='000300',secid='1.000300',color='#367b9f'),
-    dict(id='csi500',name='中证500',code='000905',secid='1.000905',color='#287b70'),
+    dict(id='chinext',name='创业板ETF易方达',code='159915',secid='0.159915',color='#9a6b00',default=False),
+    dict(id='csi300',name='沪深300',code='000300',secid='1.000300',color='#367b9f',default=False),
+    dict(id='csi500',name='中证500',code='000905',secid='1.000905',color='#287b70',default=False),
     dict(id='csi1000',name='中证1000',code='000852',secid='1.000852',color='#765a9b'),
     dict(id='csi2000',name='中证2000',code='932000',secid='2.932000',color='#c16c3a'),
     dict(id='microcap',name='微盘股指数',code='866006.RI',color='#717b36'),
