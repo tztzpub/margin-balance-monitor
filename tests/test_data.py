@@ -219,3 +219,27 @@ def test_workstation_dispatch_supplies_official_data_without_shell_interpolation
  assert payload['code']=='866006.RI'
  assert payload['rows']==[['2026-11-10',15207.1622]]
  assert all(c[1]['check'] for c in calls)
+
+
+def test_csi_tail_uses_verified_completed_index_closes_only(monkeypatch):
+ from market import complete_csi_tail
+ from datetime import date
+ import json
+ known=[('csi2000',f'2026-11-{d:02}',100.) for d in [9,10,11]]
+ calendar={r[1] for r in known}|{'2026-11-12','2026-11-13'}
+ payload={'indices':{'csi2000':{'code':'932000.INDX','rows':[[f'2026-11-{d:02}',100.001 if d<12 else 102.] for d in [9,10,11,12,13]]}}}
+ monkeypatch.setenv('MICROCAP_JSON',json.dumps(payload))
+ result=complete_csi_tail(None,'csi2000','932000',known,None,calendar,date(2026,11,15))
+ assert result[:3]==known
+ assert result[-2:]==[('csi2000','2026-11-12',102.),('csi2000','2026-11-13',102.)]
+ with pytest.raises(ValueError,match='overlap mismatch'):
+  complete_csi_tail(None,'csi2000','932000',[(k,d,110.) for k,d,c in known],None,calendar,date(2026,11,15))
+ payload['indices']['csi2000']['code']='wrong'
+ monkeypatch.setenv('MICROCAP_JSON',json.dumps(payload))
+ with pytest.raises(ValueError,match='identity'):
+  complete_csi_tail(None,'csi2000','932000',known,None,calendar,date(2026,11,15))
+ payload['indices']['csi2000']['code']='932000.INDX'
+ payload['indices']['csi2000']['rows'].append(['2026-11-16',99.])
+ monkeypatch.setenv('MICROCAP_JSON',json.dumps(payload))
+ with pytest.raises(ValueError,match='incomplete'):
+  complete_csi_tail(None,'csi2000','932000',known,None,calendar,date(2026,11,15))

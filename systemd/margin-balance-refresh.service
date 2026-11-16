@@ -4,4 +4,4 @@ Description=Trigger margin balance dashboard refresh and publication
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /home/ubuntu/Desktop/margin-balance-monitor/launch_refresh.py
-TimeoutStartSec=90
+TimeoutStartSec=150

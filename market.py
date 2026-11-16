@@ -85,6 +85,36 @@ def microcap_prices(payload,previous,end):
     fresh.insert(0,'id','microcap')
     return pd.concat([old,fresh]).drop_duplicates(['id','date'],keep='last')
 
+def complete_csi_tail(session, key, code, rows, previous, calendar, end):
+    """Append missing completed index closes after checking overlapping quotations."""
+    known={d:float(c) for k,d,c in rows}
+    if previous is not None:
+        known={**dict(previous.loc[previous.id==key,['date','close']].itertuples(index=False,name=None)),**known}
+    latest=max(known)
+    if latest>=max(calendar):return rows
+    supplied=json.loads(os.environ.get('MICROCAP_JSON') or '{}').get('indices',{}).get(key)
+    if supplied is None:
+        # Scheduled GitHub-only runs retain verified data until the workstation supplies it.
+        return rows
+    expected='932000.INDX' if key=='csi2000' else '000985.XSHG'
+    if supplied.get('code')!=expected:raise ValueError(f'{key}: incorrect supplemental index identity')
+    fresh={}
+    for date,close in supplied.get('rows',[]):
+        pd.to_datetime(date,format='%Y-%m-%d',errors='raise');close=float(close)
+        if date>str(end):raise ValueError(f'{key}: supplemental close is an incomplete session')
+        if date not in calendar:raise ValueError(f'{key}: supplemental close outside trading calendar')
+        if date in fresh or not math.isfinite(close) or close<=0:raise ValueError(f'{key}: invalid supplemental closes')
+        fresh[date]=close
+    overlap=set(known)&set(fresh)
+    # Published index levels are rounded to two decimals; providers can differ by one cent.
+    if len(overlap)<3 or any(abs(known[d]-fresh[d])>.011 for d in overlap):
+        raise ValueError(f'{key}: supplemental index overlap mismatch')
+    needed={d for d in calendar if d>latest}
+    if not needed<=set(fresh):raise ValueError(f'{key}: supplemental index still lacks {sorted(needed-set(fresh))}')
+    print(f'{key}: supplement verified index closes from RiceQuant: {sorted(needed)}')
+    return rows+[(key,d,fresh[d]) for d in sorted(needed)]
+
+
 def fetch_prices(session,previous=None):
     now=datetime.now(ZoneInfo('Asia/Shanghai'))
     end=now.date() if now.hour>=15 else now.date()-timedelta(days=1)
@@ -131,6 +161,7 @@ def fetch_prices(session,previous=None):
                 # Retain already verified closes from this same source. The final
                 # validation still rejects gaps for sessions never downloaded.
                 print(f'{key}: retaining published CSI closes omitted by response: {sorted(omitted)}')
+        csi=complete_csi_tail(session,key,code,csi,previous,calendar,end)
         frame=pd.concat([frame,pd.DataFrame(csi,columns=['id','date','close'])])
     if previous is not None:frame=pd.concat([previous,frame]).drop_duplicates(['id','date'],keep='last')
     micro=microcap_prices(os.environ.get('MICROCAP_JSON'),previous,end)
