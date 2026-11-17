@@ -180,3 +180,22 @@ def test_microcap_selection_hover_keyboard_and_mobile(tmp_path):
             page.locator('#bias').screenshot(path=str(tmp_path/f'microcap-{width}.png'))
             page.close()
         browser.close()
+
+
+def test_trend_channels_share_range_and_support_keyboard():
+    p=Path(__file__).resolve().parents[1]/'index.html'
+    with sync_playwright() as w:
+        browser=w.chromium.launch(headless=True)
+        page=browser.new_page(viewport={'width':1440,'height':1000})
+        errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+        page.goto(p.as_uri())
+        assert page.locator('.trend-plot svg').count()==2
+        plot=page.locator('#trend-csi1000 .trend-plot');plot.focus()
+        detail=page.locator('#trend-csi1000 .trend-detail')
+        latest=detail.inner_text();page.keyboard.press('ArrowLeft');assert detail.inner_text()!=latest
+        page.keyboard.press('End');assert detail.inner_text()==latest
+        page.locator('[data-range="1m"]').click();plot.focus();page.keyboard.press('Home')
+        assert detail.inner_text()[:10]>=page.locator('#from').input_value()
+        page.locator('.trend-method summary').click();assert page.locator('.trend-method p').is_visible()
+        assert not errors,errors
+        browser.close()
