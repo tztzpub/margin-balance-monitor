@@ -246,12 +246,12 @@ def test_csi_tail_uses_verified_completed_index_closes_only(monkeypatch):
 
 
 def test_micro400_reference_spans_2015_without_overlapping_the_official_series():
- from market import PRICE_FILE,bias_data,microcap_reference_bias
+ from market import PRICE_FILE,bias_data,microcap_reference_rows
  calendar=pd.read_csv(PRICE_FILE).query("id=='csi300'").date
  official=next(s for s in bias_data() if s['id']=='microcap')
  first_official=official['rows'][0][0]
- reference=microcap_reference_bias(first_official,calendar)
- assert [r[0] for r in reference['rows']]==[d for d in calendar if '2015-01-01'<=d<first_official]
- first=reference['rows'][0]
+ reference=microcap_reference_rows(first_official,calendar)
+ assert [r[0] for r in reference]==[d for d in calendar if '2015-01-01'<=d<first_official]
+ first=reference[0]
  assert first[5]<'2015-01-01'
  assert first[1]==pytest.approx(100*(first[2]/first[3]-1),abs=1e-5)

@@ -179,7 +179,7 @@ def bias_rows(prices):
             for d,b,c,m,a in zip(prices.date,bias,prices.close,average,window_start) if pd.notna(b)]
 
 
-def microcap_reference_bias(official_start, calendar):
+def microcap_reference_rows(official_start, calendar):
     prices=pd.read_csv(ROOT/'data/micro400_bias_reference.csv',dtype={'date':str})
     dates=prices.date.tolist()
     expected=sorted(d for d in calendar if dates[0]<=d<official_start)
@@ -188,8 +188,7 @@ def microcap_reference_bias(official_start, calendar):
     rows=[row for row in bias_rows(prices) if row[0]>='2015-01-01']
     if not rows or rows[0][0]!=min(d for d in calendar if d>='2015-01-01'):
         raise ValueError('Micro400 reference lacks the 2015 warmup')
-    return dict(id='microcap_reference',name='微盘400历史参考',code='自建微盘400',
-                color='#7e7655',fixed_history=True,dash='5 3',rows=rows)
+    return rows
 
 
 def bias_data(path=PRICE_FILE):

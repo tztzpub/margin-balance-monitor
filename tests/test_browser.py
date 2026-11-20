@@ -101,7 +101,7 @@ def test_bias_chart_shared_range_and_selection(tmp_path):
         page.goto((root/'index.html').as_uri());page.wait_for_timeout(200)
         page.locator('#to').fill('2026-10-30');page.locator('#to').dispatch_event('change')
         assert page.locator('.bias-series').count()==4
-        assert page.locator('[data-bias]:checked').evaluate_all('(xs)=>xs.map(x=>x.getAttribute("aria-label"))')==['显示科创50ETF华夏','显示中证1000','显示中证2000','显示微盘股指数','显示微盘400历史参考']
+        assert page.locator('[data-bias]:checked').evaluate_all('(xs)=>xs.map(x=>x.getAttribute("aria-label"))')==['显示科创50ETF华夏','显示中证1000','显示中证2000','显示微盘股指数']
         assert page.locator('[data-bias-value="1"]').inner_text()=='−25.23%'
         assert page.locator('[data-bias-value="6"]').inner_text()=='−14.15%'
         page.locator('#bias .plot').focus();page.keyboard.press('ArrowLeft')
@@ -135,7 +135,7 @@ def test_etf_board_is_separate_from_original_chart(tmp_path):
             page=browser.new_page(viewport={'width':width,'height':1000},is_mobile=width<600,has_touch=width<600)
             page.route('https://*.gtimg.cn/**',lambda r:r.abort())
             page.goto((root/'index.html').as_uri())
-            assert page.locator('[data-bias]').count()==9
+            assert page.locator('[data-bias]').count()==8
             assert page.locator('#etf-monitor tbody tr').count()==12
             assert len(json.loads(page.locator('#etf-specs').text_content()))==12
             assert page.locator('#etf-monitor [data-code="159919"]').count()==1
