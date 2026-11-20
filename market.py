@@ -170,16 +170,28 @@ def fetch_prices(session,previous=None):
     validate_prices(frame,previous)
     return frame
 
+def bias_rows(prices):
+    prices=prices.sort_values('date')
+    average=prices.close.rolling(60,min_periods=60).mean()
+    bias=(prices.close/average-1)*100
+    window_start=prices.date.shift(59)
+    return [[d,round(float(b),6),round(float(c),8),round(float(m),8),d,a]
+            for d,b,c,m,a in zip(prices.date,bias,prices.close,average,window_start) if pd.notna(b)]
+
+
+def microcap_reference_bias(official_start, calendar):
+    prices=pd.read_csv(ROOT/'data/micro400_bias_reference.csv',dtype={'date':str})
+    dates=prices.date.tolist()
+    expected=sorted(d for d in calendar if dates[0]<=d<official_start)
+    if dates!=expected or not prices.close.map(lambda p:math.isfinite(p) and p>0).all():
+        raise ValueError('Invalid micro400 reference closes or coverage')
+    rows=[row for row in bias_rows(prices) if row[0]>='2015-01-01']
+    if not rows or rows[0][0]!=min(d for d in calendar if d>='2015-01-01'):
+        raise ValueError('Micro400 reference lacks the 2015 warmup')
+    return dict(id='microcap_reference',name='微盘400历史参考',code='自建微盘400',
+                color='#7e7655',fixed_history=True,dash='5 3',rows=rows)
+
+
 def bias_data(path=PRICE_FILE):
     frame=pd.read_csv(path,dtype={'id':str,'date':str});validate_prices(frame)
-    result=[]
-    for spec in SERIES:
-        g=frame.loc[frame.id==spec['id']].sort_values('date')
-        # Each completed session uses its own close and the 60 closes ending there.
-        average=g.close.rolling(60,min_periods=60).mean()
-        bias=(g.close/average-1)*100
-        start_date=g.date.shift(59)
-        rows=[[d,round(float(b),6),round(float(c),8),round(float(m),8),p,a]
-              for d,b,c,m,p,a in zip(g.date,bias,g.close,average,g.date,start_date) if pd.notna(b)]
-        result.append({**spec,'rows':rows})
-    return result
+    return [{**spec,'rows':bias_rows(frame.loc[frame.id==spec['id']])} for spec in SERIES]

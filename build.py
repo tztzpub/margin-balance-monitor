@@ -4,7 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import pandas as pd
-from market import bias_data, SERIES
+from market import bias_data, microcap_reference_bias, PRICE_FILE, SERIES
 from trend import channel_data
 
 ROOT=Path(__file__).resolve().parent
@@ -69,15 +69,15 @@ function showBias(v,date,inspect){
  document.querySelector('#bias .bias-date').textContent=date;
  const detail=[];
  BIAS.forEach((s,j)=>{const r=biasMaps[j].get(date),checked=document.querySelector(`[data-bias="${j}"]`).checked;
-  document.querySelector(`[data-bias-value="${j}"]`).textContent=r?pct(r[1]):(s.rows.length&&date>s.rows.at(-1)[0]?'待更新':'—');
+  document.querySelector(`[data-bias-value="${j}"]`).textContent=r?pct(r[1]):(!s.fixed_history&&s.rows.length&&date>s.rows.at(-1)[0]?'待更新':'—');
   const dot=v.dots[j];if(dot){const cy=r?v.y(r[1]):-1;dot.style.display=r&&cy>=v.T&&cy<=v.H-v.B?'':'none';if(r){dot.setAttribute('cx',x);dot.setAttribute('cy',cy)}}
   const label=document.querySelector(`[data-bias="${j}"]`).closest('label');
-  label.title=r?`${s.name} · ${s.code}\n价格日期 ${r[4]} · 收盘价 ${r[2]} · MA60 ${r[3].toFixed(4)}`:`${s.name} · ${s.code} · 此日期暂无数据；最新已发布 ${s.rows.at(-1)?.[0]??"—"}`;
+  label.title=r?`${s.name} · ${s.code}\n价格日期 ${r[4]} · ${s.fixed_history?'参考点位':'收盘价'} ${r[2]} · MA60 ${r[3].toFixed(4)}`:`${s.name} · ${s.code} · 此日期暂无数据；最新已发布 ${s.rows.at(-1)?.[0]??"—"}`;
   if(r&&checked)detail.push(`${s.name} ${pct(r[1])}`);
  });
  v.svg.setAttribute('aria-label',`${date}，60日乖离率，${detail.join('，')}`);
  const selected=BIAS.map((s,j)=>({s,r:biasMaps[j].get(date),j})).filter(o=>o.r&&document.querySelector(`[data-bias="${o.j}"]`).checked);
- document.querySelector('#bias .bias-detail').innerHTML=inspect?selected.map(({s,r})=>`<span><strong>${s.name}</strong> · ${r[4]} 收盘价 ${r[2].toLocaleString('en-US',{maximumFractionDigits:3})} · MA60 ${r[3].toLocaleString('en-US',{maximumFractionDigits:3})}</span>`).join(''):'';
+ document.querySelector('#bias .bias-detail').innerHTML=inspect?selected.map(({s,r})=>`<span><strong>${s.name}</strong> · ${r[4]} ${s.fixed_history?'参考点位':'收盘价'} ${r[2].toLocaleString('en-US',{maximumFractionDigits:3})} · MA60 ${r[3].toLocaleString('en-US',{maximumFractionDigits:3})}</span>`).join(''):'';
 }
 function xTicks(rows,width){const start=state.from,end=state.to,days=(end-start)/86400000,result=[];
  if(days>365*2){for(let year=+rows[0][0].slice(0,4);year<=+rows.at(-1)[0].slice(0,4);year++)for(const month of [0,5]){const t=Date.UTC(year,month,1);if(t>=start&&t<=end)result.push([t,`${year}-${month+1}`])}}
@@ -98,7 +98,7 @@ function draw(panel,rows){const host=document.querySelector(`#${panel.id} .plot`
  const dots={};
  if(panel.multi){
   for(const j of active){let started=false;const commands=[];for(const r of rows){const value=biasMaps[j].get(r[0]);if(!value){started=false;continue}commands.push((started?'L':'M')+x(stamp(r[0])).toFixed(2)+','+y(value[1]).toFixed(2));started=true}
-   if(commands.length){g.appendChild(el('path',{d:commands.join(' '),stroke:BIAS[j].color,fill:'none',class:'bias-series','stroke-width':1.7,'stroke-linejoin':'round','data-series':BIAS[j].id}));dots[j]=el('circle',{r:3,fill:BIAS[j].color,stroke:'#fff','stroke-width':1,class:'crosshair'});}
+   if(commands.length){g.appendChild(el('path',{d:commands.join(' '),stroke:BIAS[j].color,fill:'none',class:'bias-series','stroke-width':1.7,'stroke-linejoin':'round','data-series':BIAS[j].id,'stroke-dasharray':BIAS[j].dash||'none'}));dots[j]=el('circle',{r:3,fill:BIAS[j].color,stroke:'#fff','stroke-width':1,class:'crosshair'});}
   }
   if(!values.length)svg.appendChild(el('text',{x:L+P/2,y:H/2,'text-anchor':'middle'},active.length?'此区间暂无可用数据':'勾选上方标的查看曲线'));
  }else g.appendChild(el('path',{d:path,stroke:panel.color,fill:'none',class:'series'}));
@@ -129,6 +129,9 @@ apply(state.from,state.to,'ytd');
 def build(source=OUT/'financing_accounts_daily.csv',output=HTML):
     data=chart_data(source)
     bias=[s for s in bias_data() if not s["id"].startswith("etf")]
+    official_start=next(s['rows'][0][0] for s in bias if s['id']=='microcap')
+    calendar=pd.read_csv(PRICE_FILE,usecols=['date','id']).query("id=='csi300'").date
+    bias.append(microcap_reference_bias(official_start,calendar))
     etfs=[s for s in SERIES if s["id"].startswith("etf") or s["id"] in ("star","chinext")]
     trends=channel_data()
     trend_css=(ROOT/'assets/trend.css').read_text()
@@ -151,7 +154,7 @@ def build(source=OUT/'financing_accounts_daily.csv',output=HTML):
     buttons=''.join(f'<button type="button" data-range="{v}" aria-pressed="false">{label}</button>' for v,label in [('1m','1个月'),('3m','3个月'),('6m','6个月'),('ytd','YTD'),('1y','1年'),('3y','3年'),('5y','5年'),('2017','2017至今'),('all','全部')])
     charts=''.join(f'''<section class="panel" id="{key}" style="--series:{color}"><div class="panel-head"><h2><span class="swatch" aria-hidden="true"></span>{title}</h2><div class="reading"><time></time><strong></strong></div></div><div class="balance-readout"><div class="balance-item balance-current"><span class="balance-label">当日余额<time></time></span><b></b></div><div class="balance-item balance-previous"><span class="balance-label">T−20余额<time></time></span><b></b></div></div><div class="plot" tabindex="0" role="group" aria-label="{title}曲线，左右方向键查看日期"></div><div class="panel-bottom"><span class="period"></span><button type="button" class="reset" aria-label="{title}恢复自动纵轴">自动纵轴 ↺</button></div></section>''' for key,title,color in [('financing','融资余额20日变化率','#367b9f'),('lending','融券余额20日变化率','#287b70')])
     legends=''.join(f'<label style="--series:{item["color"]}"><input type="checkbox" data-bias="{i}" {"checked" if item.get("default",True) else ""} aria-label="显示{item["name"]}"><span class="swatch" aria-hidden="true"></span><span>{item["name"]}<small>{item["code"]}</small></span><b data-bias-value="{i}"></b></label>' for i,item in enumerate(bias))
-    bias_chart=f'''<section class="panel" id="bias"><div class="panel-head"><h2>60日乖离率</h2><time class="bias-date"></time></div><p class="bias-note">勾选标的对比 · ETF使用未复权收盘价，分红与份额折算会影响历史乖离率。</p><div class="bias-legend">{legends}</div><div class="plot" tabindex="0" role="group" aria-label="{len(bias)}个标的的60日乖离率，左右方向键逐日查看"></div><div class="panel-bottom"><span class="period"></span><button type="button" class="reset">自动纵轴 ↺</button></div><div class="bias-detail"></div></section>'''
+    bias_chart=f'''<section class="panel" id="bias"><div class="panel-head"><h2>60日乖离率</h2><time class="bias-date"></time></div><p class="bias-note">微盘400历史参考（虚线）覆盖 2015-01-05 至 2016-03-30，按前一交易日总市值选取 400 只股票等权计算。米筐微盘股乖离率自 2016-03-31 起。ETF使用未复权收盘价。</p><div class="bias-legend">{legends}</div><div class="plot" tabindex="0" role="group" aria-label="{len(bias)}个标的的60日乖离率，左右方向键逐日查看"></div><div class="panel-bottom"><span class="period"></span><button type="button" class="reset">自动纵轴 ↺</button></div><div class="bias-detail"></div></section>'''
     toolbar=f'''<div class="toolbar"><div class="ranges" role="group" aria-label="时间范围">{buttons}</div><div class="dates"><label>起始<input type="date" id="from" aria-label="起始日期"></label><label>结束<input type="date" id="to" aria-label="结束日期"></label></div></div><p id="date-error" class="date-error" role="alert"></p>'''
     trend_cards=''.join(f'<article class="trend-card" id="trend-{item["id"]}"><div class="trend-title"><h3>{item["name"]}</h3><time></time></div><div class="trend-stats">'+''.join(f'<div><span>{label}</span><b>—</b></div>' for label in ['收盘点位','动态中轨','相对中轨','相对下轨'])+'</div><p class="trend-state"></p><div class="trend-plot" tabindex="0" role="group" aria-label="'+item['name']+'趋势通道，左右键查看逐日数据"></div><p class="trend-detail" aria-live="polite"></p></article>' for item in trends)
     trend_section='<section class="chart-group" id="trend-section"><h2 class="group-heading">趋势轨道跟踪</h2><div class="trend-legend"><span><i style="--c:#28658a"></i>指数收盘</span><span><i style="--c:#617b45"></i>动态中轨（虚线）</span><span><i style="--c:#869671"></i>上下轨 ±10%</span></div><div class="trend-grid">'+trend_cards+'</div><details class="trend-method"><summary>计算口径</summary><p>每日使用截至当日收盘的最近500个交易日，对数价格做L1分段趋势拟合（λ＝200），仅记录当日端点，历史端点不随未来价格重画。下轨＝中轨×90%，上轨＝中轨×110%。首次收盘跌破下轨开始一轮，首次收盘回到动态中轨结束；期间反复跌破不重复计数。回到动态中轨可能来自价格反弹或中轨下移。各指数按自身最后已发布的完整交易日更新；未发布的收盘不填充。区间选择仅改变展示，不改变计算窗口。</p></details></section>'
