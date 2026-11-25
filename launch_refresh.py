@@ -1,6 +1,7 @@
 """Supply official microcap observations, then trigger the existing Pages job."""
 import json
 import subprocess
+from pathlib import Path
 
 
 def main():
@@ -19,11 +20,12 @@ start=end-timedelta(days=45)
 code=f"import rqdatac;rqdatac.init();df=rqdatac.get_price(['932000.INDX','000985.XSHG'],'{start}','{end}',frequency='1d',fields=['close'],adjust_type='none',expect_df=True).reset_index();df.to_csv('__OUTPUT__',index=False);print('MARGIN_INDEX_OK')"
 f=query_csv(code,'MARGIN_INDEX_OK','margin_index.csv',timeout=60).to_pandas()
 payload['indices']={key:{'code':code,'rows':[[str(d)[:10],float(c)] for d,c in f.loc[f.order_book_id==code,['date','close']].itertuples(index=False,name=None)]} for key,code in [('csi2000','932000.INDX'),('all','000985.XSHG')]}
-print(json.dumps(payload,separators=(',',':')))
 """
+    export += (Path(__file__).parent/'cap_export.py').read_text()
+    export += "\npayload['mean_cap']=export_recent_caps(end)\nprint(json.dumps(payload,separators=(',',':')))" 
     result=subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=15',
         'ali-gpu','/opt/aiext/bin/python3 -'],input=export,text=True,
-        capture_output=True,check=True,timeout=80)
+        capture_output=True,check=True,timeout=140)
     payload=json.loads(result.stdout)
     if payload['code']!='866006.RI' or not payload['rows']:
         raise ValueError('Missing official microcap export')

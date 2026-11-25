@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import math
+import os
 import pandas as pd
 import requests
 from requests.adapters import HTTPAdapter
@@ -55,6 +56,23 @@ def fetch_exchange_status(session):
         result[code]=dict(name=name,date=date,financing_balance_yi=values[0],securities_lending_balance_yi=values[1])
     return result
 
+def update_mean_cap(rows, prices):
+    if not rows:
+        return
+    path=ROOT/'data/micro400_mean_cap.csv'
+    old=pd.read_csv(path).set_index('date')
+    fresh=pd.DataFrame(rows,columns=['date','members','mean_cap_100m_cny']).set_index('date')
+    cap=fresh.mean_cap_100m_cny
+    if fresh.index.has_duplicates or not cap.map(math.isfinite).all() or not cap.gt(0).all() or not fresh.members.between(1,400).all():
+        raise ValueError('Invalid daily micro400 average')
+    combined=pd.concat([old.drop(index=fresh.index,errors='ignore'),fresh]).sort_index()
+    calendar=set(prices.loc[prices.id=='csi300','date'])
+    if {d for d in calendar if combined.index.min()<=d<=combined.index.max()}-set(combined.index):
+        raise ValueError('Missing trading day in micro400 capitalization')
+    temporary=path.with_suffix('.tmp')
+    combined.to_csv(temporary,float_format='%.8f')
+    temporary.replace(path)
+
 def main():
     session=requests.Session()
     session.headers.update({'User-Agent':'Mozilla/5.0 (compatible; MarginBalanceMonitor/1.0)','Referer':'https://data.eastmoney.com/'})
@@ -66,6 +84,7 @@ def main():
         exchanges=fetch_exchange_status(session)
         prices=fetch_prices(session,previous_prices)
     if prices.date.max()<f.date.max():raise ValueError('Market quotes lag the margin data publication date')
+    update_mean_cap(json.loads(os.environ.get('MICROCAP_JSON') or '{}').get('mean_cap'), prices)
     previous=pd.read_csv(DATA) if DATA.exists() else None
     validate(f,previous)
     temporary=PRICE_FILE.with_suffix('.tmp');prices.to_csv(temporary,index=False);temporary.replace(PRICE_FILE)
