@@ -2,9 +2,9 @@
   "exchange_publications": {
     "007": {
       "name": "\u6caa\u5e02",
-      "date": "2026-11-24",
-      "financing_balance_yi": 11195.32603899,
-      "securities_lending_balance_yi": 190.30327232
+      "date": "2026-11-25",
+      "financing_balance_yi": 11090.13697095,
+      "securities_lending_balance_yi": 186.90074205
     },
     "001": {
       "name": "\u6df1\u5e02",
@@ -14,14 +14,14 @@
     },
     "002": {
       "name": "\u5317\u4ea4\u6240",
-      "date": "2026-11-24",
-      "financing_balance_yi": 71.72566264,
-      "securities_lending_balance_yi": 0.00212931
+      "date": "2026-11-25",
+      "financing_balance_yi": 71.0069011,
+      "securities_lending_balance_yi": 0.00321898
     }
   },
-  "checked_at_utc": "2026-11-25T20:09:06.640720+00:00",
-  "source_last_date": "2026-11-24",
-  "record_count": 3435,
+  "checked_at_utc": "2026-11-26T00:36:03.742121+00:00",
+  "source_last_date": "2026-11-25",
+  "record_count": 3436,
   "market_last_date": "2026-11-25",
   "market_dates": {
     "all": "2026-11-25",
